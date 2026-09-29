@@ -5,12 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#185FA5"/>
 <title>Flyover</title>
+<script>
+(function(){var m='auto';try{m=localStorage.getItem('flyover_theme')||'auto';}catch(e){}
+var dark=m==='dark'||(m==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches);
+document.documentElement.setAttribute('data-theme',dark?'dark':'light');})();
+</script>
 <style>
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 :root{
+  color-scheme:light;
   --blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;
+  --grad:#185FA5;--card-grad:#185FA5;
+  --yellow:#BA7517;
   --green:#1D9E75;--green-light:#E1F5EE;
   --red:#D85A30;--red-light:#FAECE7;
   --amber:#BA7517;--amber-light:#FAEEDA;
@@ -18,13 +26,39 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
   --bg:#f0f2f5;--surface:#fff;--surface2:#f7f8fa;
   --border:#e5e7eb;--text:#111;--text2:#6b7280;--text3:#9ca3af;
   --radius:10px;--radius-lg:14px;--radius-xl:18px;
-  --shadow:0 1px 4px rgba(0,0,0,0.08);--shadow-lg:0 4px 20px rgba(0,0,0,0.12)
+  --shadow:0 1px 4px rgba(0,0,0,0.08);--shadow-lg:0 4px 20px rgba(0,0,0,0.12);
+  --app-h:100vh;
+  /* component tokens (light = original look) */
+  --hdr-bg:var(--surface);--hdr-rad:0;--hdr-pb:10px;--hdr-sh:none;--hdr-bb:1px solid var(--border);
+  --logo:var(--blue);--ham-bg:var(--surface2);--ham-fg:var(--text);
+  --av-bg:var(--blue-light);--av-fg:var(--blue);--av-bd:var(--border);
+  --ctl-bg:var(--surface2);--ctl-bd:var(--border);--ctl-fg:var(--text);--chev:var(--text3);
+  --month-pad:8px 14px 0;--nav-act-sh:none;--nav-act-rad:var(--radius);
+  --fab-bg:var(--blue);--fab-fg:#fff;--fab-sh:0 4px 16px rgba(24,95,165,.35);
+  --bal-sh:0 4px 14px rgba(24,95,165,.3);--ring:rgba(255,255,255,.6);--hero-btn:rgba(255,255,255,.18);
 }
-@media(prefers-color-scheme:dark){
-  :root{--bg:#0f1117;--surface:#1c1f26;--surface2:#252833;--border:#2d3140;--text:#f0f0f0;--text2:#9ca3af;--text3:#6b7280;--shadow:0 1px 4px rgba(0,0,0,0.4);--shadow-lg:0 4px 24px rgba(0,0,0,0.5)}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --blue:#3B82F6;--blue-light:rgba(59,130,246,.18);--blue-dark:#2A5FC4;
+  --grad:linear-gradient(160deg,#41466B 0%,#3D4265 55%,#383D5F 100%);
+  --green:#8BC34A;--green-light:rgba(139,195,74,.16);
+  --red:#F45B78;--red-light:rgba(244,91,120,.16);
+  --amber:#FFB800;--amber-light:rgba(255,184,0,.16);
+  --purple:#8B92F0;--purple-light:rgba(139,146,240,.16);
+  --bg:#343959;--surface:#3D4266;--surface2:#353A5C;
+  --border:#4D5380;--text:#FFFFFF;--text2:#B0B5D2;--text3:#8087AB;
+  --shadow:0 1px 4px rgba(0,0,0,0.25);--shadow-lg:0 4px 24px rgba(0,0,0,0.45);
+  --card-grad:linear-gradient(135deg,#3B82F6 0%,#5B6CE8 100%);--yellow:#FFB800;
+  --hdr-bg:var(--grad);--hdr-rad:0 0 22px 22px;--hdr-pb:14px;--hdr-sh:0 4px 16px rgba(20,24,48,.3);--hdr-bb:none;
+  --logo:#fff;--ham-bg:rgba(255,255,255,.15);--ham-fg:#fff;
+  --av-bg:rgba(255,255,255,.15);--av-fg:#fff;--av-bd:var(--yellow);
+  --ctl-bg:rgba(255,255,255,.15);--ctl-bd:rgba(255,255,255,.3);--ctl-fg:#fff;--chev:rgba(255,255,255,.7);
+  --month-pad:10px 0 0;--nav-act-sh:inset 0 3px 0 var(--yellow);--nav-act-rad:0 0 10px 10px;
+  --fab-bg:var(--yellow);--fab-fg:#2A2E4A;--fab-sh:0 4px 16px rgba(0,0,0,.35);
+  --bal-sh:0 4px 14px rgba(59,130,246,.35);--ring:var(--yellow);--hero-btn:rgba(255,255,255,.15);
 }
 
-#app{height:100vh;display:flex;flex-direction:column;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
+#app{height:var(--app-h);display:flex;flex-direction:column;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
 
 /* ── SCREENS ─────────────────────────────────── */
 .screen{display:none;flex-direction:column;height:100%;overflow:hidden}
@@ -42,20 +76,23 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 .btn-primary:active{transform:scale(.98)}
 
 /* ── HEADER ──────────────────────────────────── */
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0}
+.header{background:var(--hdr-bg);border-bottom:var(--hdr-bb);border-radius:var(--hdr-rad);padding:10px 14px var(--hdr-pb);flex-shrink:0;box-shadow:var(--hdr-sh);position:relative;z-index:5}
+.hamburger{width:36px;height:36px;border-radius:10px;border:none;background:var(--ham-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;flex-shrink:0}
+.hamburger span{display:block;width:18px;height:2px;border-radius:2px;background:var(--ham-fg)}
+.header-left{display:flex;align-items:center;gap:10px;min-width:0}
 .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.logo{font-size:19px;font-weight:700;color:var(--blue);letter-spacing:-.5px}
+.logo{font-size:19px;font-weight:700;color:var(--logo);letter-spacing:-.5px}
 .header-right{display:flex;align-items:center;gap:8px}
-.avatar{width:32px;height:32px;border-radius:50%;background:var(--blue-light);color:var(--blue);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--border)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--av-bg);color:var(--av-fg);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid var(--av-bd)}
 
 /* ── BOOK SELECTOR ───────────────────────────── */
-.book-selector{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:7px 12px;max-width:220px;min-width:0}
-.book-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book-selector{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--ctl-bg);border:1.5px solid var(--ctl-bd);border-radius:var(--radius);padding:7px 12px;max-width:220px;min-width:0}
+.book-name{font-size:13px;font-weight:600;color:var(--ctl-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .book-icon{font-size:16px;flex-shrink:0}
-.chevron{color:var(--text3);font-size:12px;flex-shrink:0}
+.chevron{color:var(--chev);font-size:12px;flex-shrink:0}
 
 /* ── MONTH TABS ──────────────────────────────── */
-.month-scroll{display:flex;gap:6px;overflow-x:auto;padding:8px 14px 0;scrollbar-width:none}
+.month-scroll{display:flex;gap:6px;overflow-x:auto;padding:var(--month-pad);scrollbar-width:none}
 .month-scroll::-webkit-scrollbar{display:none}
 
 /* ── PAGE CONTENT ────────────────────────────── */
@@ -68,10 +105,11 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 .s-val{font-size:20px;font-weight:700}
 .s-val.income{color:var(--green)}
 .s-val.expense{color:var(--red)}
-.balance-card{grid-column:1/-1;background:var(--blue);border:none;border-radius:var(--radius-lg);padding:14px 16px;box-shadow:0 4px 14px rgba(24,95,165,.3)}
+.balance-card{grid-column:1/-1;background:var(--blue);border:none;border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--bal-sh);background:var(--card-grad)}
 .balance-card .s-label{color:rgba(255,255,255,.7)}
 .balance-card .s-val{color:#fff;font-size:24px}
-.balance-card .s-val.negative{color:#ffb3a0}
+.balance-card .s-val.negative{color:#ffc9b8}
+.balance-card .s-label{color:rgba(255,255,255,.75)}
 
 /* ── SECTION ─────────────────────────────────── */
 .section{padding:12px 14px}
@@ -97,17 +135,17 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 /* ── NAV ─────────────────────────────────────── */
 .nav{background:var(--surface);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:6px 0 max(10px, env(safe-area-inset-bottom));flex-shrink:0}
 .nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--text2);border:none;background:none;cursor:pointer;padding:4px 14px;border-radius:var(--radius);transition:color .15s}
-.nav-btn.active{color:var(--blue)}
+.nav-btn.active{color:var(--blue);font-weight:700;box-shadow:var(--nav-act-sh);border-radius:var(--nav-act-rad)}
 .nav-icon{font-size:22px;line-height:1}
 
 /* ── FAB ─────────────────────────────────────── */
-.fab{position:fixed;bottom:72px;right:16px;width:54px;height:54px;border-radius:50%;background:var(--blue);border:none;color:#fff;font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(24,95,165,.35);z-index:40;transition:transform .15s}
+.fab{position:absolute;bottom:calc(76px + env(safe-area-inset-bottom));right:16px;width:54px;height:54px;border-radius:50%;background:var(--fab-bg);border:none;color:var(--fab-fg);font-size:28px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--fab-sh);z-index:40;transition:transform .15s}
 .fab:active{transform:scale(.93)}
 
 /* ── BOTTOM SHEET ────────────────────────────── */
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;align-items:flex-end}
 .sheet-bg.open{display:flex}
-.sheet{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:430px;margin:0 auto;max-height:92vh;overflow-y:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:430px;margin:0 auto;max-height:calc(var(--app-h) * .92);overflow-y:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
 .sheet-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
 .close-btn{background:none;border:none;font-size:24px;color:var(--text3);cursor:pointer;line-height:1;padding:0}
@@ -226,6 +264,30 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 }
 
 
+/* ── theme switch ── */
+.theme-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface2);border-radius:var(--radius);padding:4px}
+.theme-opt{padding:9px 4px;text-align:center;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;color:var(--text2);border:none;background:none}
+.theme-opt.active{background:var(--blue);color:#fff;box-shadow:var(--shadow)}
+.drawer-switch{margin-left:auto;width:38px;height:22px;border-radius:12px;background:var(--border);position:relative;transition:background .15s;flex-shrink:0}
+.drawer-switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+:root[data-theme="dark"] .drawer-switch{background:var(--blue)}
+:root[data-theme="dark"] .drawer-switch::after{transform:translateX(16px)}
+/* ── side drawer ── */
+.drawer-bg{position:absolute;inset:0;background:rgba(10,16,36,.5);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-bg.open{opacity:1;pointer-events:auto}
+.drawer{position:absolute;top:0;bottom:0;left:0;width:78%;max-width:300px;background:var(--surface);z-index:61;transform:translateX(-102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.drawer.open{transform:none}
+.drawer-head{background:var(--grad);color:#fff;padding:calc(22px + env(safe-area-inset-top)) 18px 18px;border-radius:0 0 22px 0}
+.drawer-avatar{width:46px;height:46px;border-radius:50%;background:var(--hero-btn);border:2.5px solid var(--ring);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;margin-bottom:10px}
+.drawer-name{font-size:16px;font-weight:700}
+.drawer-sub{font-size:12px;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drawer-list{flex:1;overflow-y:auto;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+.drawer-item{display:flex;align-items:center;gap:14px;width:100%;padding:12px;border:none;background:none;border-radius:var(--radius);font-size:15px;font-weight:500;color:var(--text);cursor:pointer;text-align:left}
+.drawer-item .di{width:26px;text-align:center;font-size:20px;color:var(--text2)}
+.drawer-item.active{background:var(--blue-light);color:var(--blue);font-weight:700}
+.drawer-item.active .di{color:var(--blue)}
+.drawer-sep{height:1px;background:var(--border);margin:8px 6px}
+.drawer-item.danger{color:var(--red)}
 /* ── split expense ── */
 .split-box{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin:-4px 0 14px}
 .split-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -244,8 +306,8 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 .mem-bar>div{height:100%;background:var(--red);border-radius:3px}
 .mem-total{display:flex;justify-content:space-between;padding:6px 4px 0;font-size:13px;font-weight:700}
 /* ── cloud additions: splash, login, members ── */
-#splashScreen{background:var(--blue);color:#fff;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:.5px}
-#authScreen{background:var(--blue);align-items:center;justify-content:center;padding:24px;overflow-y:auto}
+#splashScreen{background:var(--grad);color:#fff;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:.5px}
+#authScreen{background:var(--grad);align-items:center;justify-content:center;padding:24px;overflow-y:auto}
 .auth-logo{font-size:34px;font-weight:800;color:#fff;text-align:center;letter-spacing:.5px}
 .auth-tagline{font-size:13px;color:rgba(255,255,255,.75);text-align:center;margin:4px 0 20px}
 .auth-card{background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:380px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
@@ -316,7 +378,7 @@ window.addEventListener('error',function(e){
 <div class="screen" id="mainScreen">
   <div class="header">
     <div class="header-top">
-      <div class="logo">Flyover</div>
+      <div class="header-left"><button class="hamburger" aria-label="Menu" onclick="openDrawer()"><span></span><span></span><span></span></button><div class="logo">Flyover</div></div>
       <div class="header-right">
         <div class="book-selector" onclick="openBooksSheet()">
           <span class="book-icon" id="headerBookIcon">📒</span>
@@ -336,6 +398,22 @@ window.addEventListener('error',function(e){
     <button class="nav-btn" id="navCategories" onclick="showPage('categories')"><span class="nav-icon">⊕</span>Categories</button>
     <button class="nav-btn" id="navProfile" onclick="showPage('profile')"><span class="nav-icon">◎</span>Profile</button>
   </nav>
+  <div class="drawer-bg" id="drawerBg" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head"><div class="drawer-avatar" id="drawerAvatar">U</div><div class="drawer-name" id="drawerName"></div><div class="drawer-sub" id="drawerSub"></div></div>
+    <div class="drawer-list">
+      <button class="drawer-item" data-p="dashboard" onclick="drawerGo('dashboard')"><span class="di">⊞</span>Dashboard</button>
+      <button class="drawer-item" data-p="transactions" onclick="drawerGo('transactions')"><span class="di">≡</span>Entries</button>
+      <button class="drawer-item" data-p="categories" onclick="drawerGo('categories')"><span class="di">⊕</span>Categories</button>
+      <button class="drawer-item" data-p="profile" onclick="drawerGo('profile')"><span class="di">◎</span>Profile</button>
+      <div class="drawer-sep"></div>
+      <button class="drawer-item" onclick="toggleTheme()"><span class="di" id="themeIcon">🌙</span>Dark mode<span class="drawer-switch"></span></button>
+      <button class="drawer-item" onclick="closeDrawer();openBooksSheet()"><span class="di">📒</span>Switch / manage books</button>
+      <button class="drawer-item" onclick="closeDrawer();openShareSheet()"><span class="di">👥</span>Share / members</button>
+      <div class="drawer-sep"></div>
+      <button class="drawer-item danger" onclick="closeDrawer();confirmLogout()"><span class="di">⏻</span>Sign out</button>
+    </div>
+  </aside>
 </div>
 
 </div>
@@ -371,7 +449,9 @@ const firebaseConfig={
 // ═══════════════════════════════════════════════
 //  CONSTANTS & HELPERS
 // ═══════════════════════════════════════════════
-const CAT_COLORS=['#185FA5','#1D9E75','#D85A30','#BA7517','#534AB7','#3B6D11','#993C1D','#D4537E','#0F6E56','#963C00','#2a7a8a','#7b3fa0'];
+const CAT_COLORS_LIGHT=['#185FA5','#1D9E75','#D85A30','#BA7517','#534AB7','#3B6D11','#993C1D','#D4537E','#0F6E56','#963C00','#2a7a8a','#7b3fa0'];
+const CAT_COLORS_DARK=['#3B82F6','#F45B78','#8BC34A','#FFB800','#7C83E0','#2FC4B2','#FF8A5B','#B36AE2','#5AA9E6','#E6849A','#A3D977','#F7D154'];
+function catPalette(){return document.documentElement.getAttribute('data-theme')==='dark'?CAT_COLORS_DARK:CAT_COLORS_LIGHT;}
 const CAT_EMOJI={'Entertainment':'🎬','Fast Food':'🍔','Grocery':'🛒','Home Improvement':'🏠','Travel':'✈️','Fuel':'⛽','Dress':'👗','Rent / Bills':'🏢','Salary':'💼','Salary Income':'💼','Freelance':'💻','Business':'📊','Business Income':'📊','Investment':'📈','Medical':'💊','Education':'📚','Gift':'🎁','Other':'📦'};
 const DEFAULT_EXPENSE_CATS=['Entertainment','Fast Food','Grocery','Home Improvement','Travel','Fuel','Dress','Rent / Bills','Medical','Education','Gift','Other'];
 const DEFAULT_INCOME_CATS=['Salary Income','Business Income'];
@@ -641,7 +721,7 @@ function bookCats(bookId,type){
 }
 function catColor(name){
   const i=bookCats(S.currentBookId).indexOf(name);
-  return CAT_COLORS[(i>=0?i:hashStr(name))%CAT_COLORS.length];
+  const P=catPalette();return P[(i>=0?i:hashStr(name))%P.length];
 }
 function refreshHeader(){
   if(!U)return;
@@ -666,7 +746,7 @@ function renderBooksSheet(){
     const cur=b.id===S.currentBookId,id=esc(b.id),owner=isOwner(b),n=b.memberIds.length;
     return `<div class="book-item ${cur?'current':''}">
       <div data-id="${id}" onclick="selectBook(this.dataset.id)" style="display:flex;align-items:center;flex:1;gap:10px;cursor:pointer">
-        <div class="book-item-icon" style="background:${cur?'#185FA520':'var(--surface)'};border:1.5px solid var(--border)">${esc(b.emoji)}</div>
+        <div class="book-item-icon" style="background:${cur?'var(--blue-light)':'var(--surface)'};border:1.5px solid var(--border)">${esc(b.emoji)}</div>
         <div class="book-item-body">
           <div class="book-item-name">${esc(b.name)}</div>
           <div class="book-item-meta">${n} member${n>1?'s':''} · ${owner?'Owner':(myRole(b)==='editor'?'Editor':'Viewer')}</div>
@@ -839,8 +919,17 @@ function refreshShareSheetIfOpen(){
 function showPage(page){
   V.page=page;
   ['dashboard','transactions','categories','profile'].forEach(p=>$('nav'+p.charAt(0).toUpperCase()+p.slice(1)).classList.toggle('active',p===page));
+  document.querySelectorAll('.drawer-item[data-p]').forEach(el=>el.classList.toggle('active',el.dataset.p===page));
+  closeDrawer();
   updateFab();renderMonthTabs();renderPage();
 }
+function openDrawer(){
+  $('drawerAvatar').textContent=initials(U&&U.name);$('drawerName').textContent=(U&&U.name)||'';$('drawerSub').textContent=(U&&U.email)||'';
+  document.querySelectorAll('.drawer-item[data-p]').forEach(el=>el.classList.toggle('active',el.dataset.p===V.page));
+  $('drawerBg').classList.add('open');$('drawer').classList.add('open');
+}
+function closeDrawer(){const b=$('drawerBg'),d=$('drawer');if(b)b.classList.remove('open');if(d)d.classList.remove('open');}
+function drawerGo(p){showPage(p);}
 function getBookYears(){
   const y=new Set(S.transactions.map(t=>t.date.slice(0,4)));y.add(today().slice(0,4));
   return [...y].sort().reverse();
@@ -1019,7 +1108,7 @@ function renderCompareTab(){
 //  CATEGORIES (stored on the book, shared by all members)
 // ═══════════════════════════════════════════════
 function catRows(list,type,edit){
-  return list.map((c,i)=>`<div class="manage-cat-item"><div class="cat-dot" style="background:${CAT_COLORS[i%CAT_COLORS.length]};width:10px;height:10px"></div>
+  return list.map((c,i)=>`<div class="manage-cat-item"><div class="cat-dot" style="background:${catPalette()[i%catPalette().length]};width:10px;height:10px"></div>
     <span class="cat-name">${esc(catEmoji(c))} ${esc(c)}</span>
     ${edit?`<div class="cat-menu-wrap"><button class="cat-menu-btn" data-c="${esc(c)}" data-type="${type}" onclick="toggleCatMenu(event,this.dataset.c,this.dataset.type)">⋮</button></div>`:''}</div>`).join('');
 }
@@ -1099,6 +1188,8 @@ function renderProfilePage(){
     <div class="info-row"><span class="label">Total books</span><span class="value">${S.books.length}</span></div>
     <div class="info-row"><span class="label">Entries (this book)</span><span class="value">${S.transactions.length}</span></div>
     <div class="info-row"><span class="label">Cloud sync</span><span class="value"><span class="sync-status" style="color:${s.c}"><span class="sync-dot" style="background:${s.c}"></span>${s.t}</span></span></div></div>
+  <div class="profile-card"><div class="section-title" style="margin-bottom:12px">Appearance</div>
+    <div class="theme-seg">${['light','dark','auto'].map(m=>`<button class="theme-opt ${themeMode()===m?'active':''}" onclick="setTheme('${m}')">${m==='light'?'☀️ Light':m==='dark'?'🌙 Dark':'⚙️ Auto'}</button>`).join('')}</div></div>
   <div class="profile-card"><div class="section-title" style="margin-bottom:12px">Book Options</div>
     <button class="btn btn-outline" style="margin-bottom:8px" onclick="openShareSheet()">👥 Share / Members</button>
     <button class="btn btn-outline" style="margin-bottom:8px" onclick="openBooksSheet()">📚 Manage Books</button>
@@ -1291,6 +1382,30 @@ function toast(msg,dur=2200){const el=$('toast');el.textContent=msg;el.classList
 window.addEventListener('online',()=>{toast('Back online ✅');if(U&&V.page==='profile')renderPage();});
 window.addEventListener('offline',()=>{toast('Offline — changes are saved on this device');if(U&&V.page==='profile')renderPage();});
 
+// ── THEME (light / dark / auto = follow the phone) ──
+function themeMode(){return lsGet('flyover_theme')||'auto';}
+function applyTheme(){
+  const m=themeMode(),sysDark=window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches;
+  const dark=m==='dark'||(m==='auto'&&sysDark);
+  document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+  const tc=document.querySelector('meta[name=theme-color]');if(tc)tc.setAttribute('content',dark?'#3D4265':'#185FA5');
+  const ic=$('themeIcon');if(ic)ic.textContent=dark?'🌙':'☀️';
+}
+function setTheme(m){lsSet('flyover_theme',m);applyTheme();if(U&&currentBook())renderPage();}
+function toggleTheme(){
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  setTheme(dark?'light':'dark');
+}
+if(window.matchMedia)matchMedia('(prefers-color-scheme:dark)').addEventListener&&matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(themeMode()==='auto'){applyTheme();if(U&&currentBook())renderPage();}});
+// WebViews report 100vh taller than the visible area (hides the bottom nav) → size the app to the real viewport
+function fitViewport(){
+  const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
+  document.documentElement.style.setProperty('--app-h',Math.round(h)+'px');
+}
+fitViewport();applyTheme();
+window.addEventListener('resize',fitViewport);
+window.addEventListener('orientationchange',()=>setTimeout(fitViewport,250));
+if(window.visualViewport)window.visualViewport.addEventListener('resize',fitViewport);
 function boot(){
   document.body.style.overscrollBehavior='none';
   if(location.protocol==='file:')$('fileWarn').style.display='block';
