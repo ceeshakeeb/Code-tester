@@ -475,6 +475,16 @@ function onSignedIn(user){
   showScreen('mainScreen');
   showPage('dashboard');
   unsubBooks=db.collection('books').where('memberIds','array-contains',U.uid).onSnapshot(handleBooksSnap,dbErr);
+  syncEmailIndex();
+}
+// Lets an owner look someone up by email to invite them — the client can't query Firebase Auth
+// directly, so each user maintains their own /emailIndex/{email} doc (doc ID = their own lowercased
+// email, so the security rules can let anyone GET one entry by ID without permitting a full LIST/scan).
+function syncEmailIndex(){
+  const email=(U.email||'').trim().toLowerCase();
+  if(!email)return;
+  db.collection('emailIndex').doc(email).set({uid:U.uid,name:U.name,email:U.email},{merge:true})
+    .catch(e=>console.warn('emailIndex sync failed (invites by email need updated Firestore rules):',e));
 }
 function onSignedOut(){
   teardown();U=null;registerName='';
@@ -655,8 +665,7 @@ function renderBooksSheet(){
     <div class="sheet-title">Your Books<button class="close-btn" onclick="closeSheetNow()">×</button></div>
     ${items||'<div class="empty-text" style="padding:12px;color:var(--text3)">Loading…</div>'}
     <div class="divider"></div>
-    <button class="btn btn-primary" onclick="openAddBookSheet()" style="margin-bottom:8px">+ New Book</button>
-    <button class="btn btn-outline" onclick="openJoinBookSheet()">Join Shared Book</button>`;
+    <button class="btn btn-primary" onclick="openAddBookSheet()">+ New Book</button>`;
 }
 function toggleBookMenu(id){
   const m=$('menu-'+id);if(!m)return;
@@ -730,31 +739,10 @@ async function confirmDeleteBook(id){
 }
 function confirmLeaveBook(id){
   const b=S.books.find(x=>x.id===id);if(!b)return;
-  if(!confirm('Leave "'+b.name+'"? You can rejoin later with the Book ID.'))return;
+  if(!confirm('Leave "'+b.name+'"? The owner will need to invite you again to rejoin.'))return;
   bookRef(id).update({memberIds:FV.arrayRemove(U.uid),['members.'+U.uid]:FV.delete()}).catch(dbErr);
   toast('Left book');
 }
-function openJoinBookSheet(){
-  $('sheetInner').innerHTML=`
-    <div class="sheet-title">Join a Shared Book<button class="close-btn" onclick="openBooksSheet()">×</button></div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Ask the book owner for the Book ID (Profile → Share / Members) and paste it below.</p>
-    <div class="form-group"><label class="form-label">Book ID</label>
-      <input class="form-input" id="joinBookId" placeholder="Paste book ID here..." autocapitalize="off" autocomplete="off"/></div>
-    <button class="btn btn-primary" onclick="joinBook()">Join Book</button>`;
-}
-function joinBook(){
-  const id=$('joinBookId').value.trim();
-  if(!/^[A-Za-z0-9_-]{6,60}$/.test(id)){toast('That does not look like a Book ID');return;}
-  if(S.books.some(b=>b.id===id)){toast('You are already a member!');return;}
-  const btn=document.querySelector('#sheetInner .btn-primary');
-  if(btn){btn.disabled=true;btn.textContent='Joining…';}
-  pendingSelect=id;
-  bookRef(id).update({memberIds:FV.arrayUnion(U.uid),['members.'+U.uid]:{name:U.name,email:U.email,role:'editor'}})
-    .then(()=>{closeSheetNow();showPage('dashboard');toast('Joined book ✓');})
-    .catch(e=>{pendingSelect=null;if(btn){btn.disabled=false;btn.textContent='Join Book';}
-      toast((e&&e.code==='permission-denied')||(e&&e.code==='not-found')?'Book not found — check the Book ID':'Could not join: '+((e&&e.message)||'error'),3500);});
-}
-
 // ═══════════════════════════════════════════════
 //  SHARING
 // ═══════════════════════════════════════════════
@@ -774,20 +762,39 @@ function openShareSheet(){
       <div class="member-info" style="flex:1;min-width:0"><div class="member-name">${esc(m.name||'Unknown')}${uid===U.uid?' (you)':''}</div>
         <div class="member-email" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.email||'')}</div></div>${ctl}</div>`;
   }).join('');
+  const invite=owner?`
+    <div class="form-group"><label class="form-label">Invite by email</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="inviteEmail" type="email" placeholder="person@example.com" autocapitalize="off" autocomplete="off" style="flex:1"/>
+        <button class="btn-sq" id="inviteBtn" onclick="inviteMemberByEmail()">+</button>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:6px">They must already have a Flyover account. They'll join as an Editor — you can switch them to Viewer below.</p>
+    </div><div class="divider"></div>`:'';
   $('sheetInner').innerHTML=`
     <div class="sheet-title">Share Book<button class="close-btn" onclick="closeSheetNow()">×</button></div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">BOOK ID (share this)</div>
-      <div style="font-size:13px;font-weight:700;color:var(--blue);letter-spacing:1px;word-break:break-all">${esc(b.id)}</div>
-      <button class="btn btn-outline" style="margin-top:8px;padding:7px" data-id="${esc(b.id)}" onclick="copyBookId(this.dataset.id)">Copy ID</button>
-    </div>
-    <p style="font-size:11px;color:var(--text3);margin-bottom:12px">Anyone who signs in and enters this ID joins as an Editor. Owners can switch people to Viewer or remove them below.</p>
+    ${invite}
     <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">Members (${list.length})</div>${rows}`;
   openSheet();
 }
-function copyBookId(id){
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(id).then(()=>toast('Book ID copied!'),()=>prompt('Copy this Book ID:',id));
-  else prompt('Copy this Book ID:',id);
+function inviteMemberByEmail(){
+  const b=currentBook();if(!b||!isOwner(b))return;
+  const raw=$('inviteEmail').value.trim();
+  const email=raw.toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Enter a valid email address');return;}
+  if(email===(U.email||'').toLowerCase()){toast("That's your own email");return;}
+  if(Object.values(b.members).some(m=>(m.email||'').toLowerCase()===email)){toast('Already a member');return;}
+  const btn=$('inviteBtn');btn.disabled=true;btn.textContent='…';
+  db.collection('emailIndex').doc(email).get().then(doc=>{
+    if(!doc.exists){toast('No Flyover account found for that email — ask them to sign up first',3500);return;}
+    const info=doc.data()||{};
+    const uid=info.uid;
+    if(!uid){toast('Could not find that account');return;}
+    if(b.memberIds.includes(uid)){toast('Already a member');return;}
+    return bookRef(b.id).update({
+      memberIds:FV.arrayUnion(uid),
+      ['members.'+uid]:{name:info.name||email,email:info.email||email,role:'editor'}
+    }).then(()=>{$('inviteEmail').value='';toast((info.name||email)+' added ✓');});
+  }).catch(dbErr).then(()=>{const el=$('inviteBtn');if(el){el.disabled=false;el.textContent='+';}});
 }
 function changeMemberRole(uid,role){
   const b=currentBook();if(!isOwner(b)||(role!=='editor'&&role!=='viewer'))return;
@@ -800,7 +807,7 @@ function removeMember(uid){
 }
 // keep the open share sheet fresh when membership changes remotely
 function refreshShareSheetIfOpen(){
-  if($('sheetBg').classList.contains('open')&&$('sheetInner').querySelector('.member-row')&&!$('sheetInner').querySelector('select:focus'))openShareSheet();
+  if($('sheetBg').classList.contains('open')&&$('sheetInner').querySelector('.member-row')&&!$('sheetInner').querySelector('select:focus, input:focus'))openShareSheet();
 }
 
 // ═══════════════════════════════════════════════
@@ -1030,7 +1037,7 @@ function renderProfilePage(){
     <div class="info-row"><span class="label">Cloud sync</span><span class="value"><span class="sync-status" style="color:${s.c}"><span class="sync-dot" style="background:${s.c}"></span>${s.t}</span></span></div></div>
   <div class="profile-card"><div class="section-title" style="margin-bottom:12px">Book Options</div>
     <button class="btn btn-outline" style="margin-bottom:8px" onclick="openShareSheet()">👥 Share / Members</button>
-    <button class="btn btn-outline" style="margin-bottom:8px" onclick="openBooksSheet()">📚 Switch / Manage Books</button>
+    <button class="btn btn-outline" style="margin-bottom:8px" onclick="openBooksSheet()">📚 Manage Books</button>
     <button class="btn btn-outline" style="margin-bottom:8px" onclick="exportCSV()">📤 Export as CSV</button>
     <button class="btn btn-primary" onclick="exportPDF()">📄 Export as PDF</button></div>
   <div class="profile-card"><button class="btn btn-danger" onclick="confirmLogout()">Sign Out</button></div></div>`;
@@ -1048,6 +1055,7 @@ function saveProfileChanges(){
   auth.currentUser.updateProfile({displayName:name}).then(()=>{
     U.name=name;
     S.books.forEach(b=>{if(b.members[U.uid])bookRef(b.id).update({['members.'+U.uid+'.name']:name}).catch(()=>{});});
+    syncEmailIndex();
     refreshHeader();toast('Profile updated ✓');closeSheetNow();
   }).catch(dbErr);
 }
