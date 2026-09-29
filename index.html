@@ -226,6 +226,23 @@ html,body{height:100%;overflow:hidden;background:#f0f2f5;font-family:-apple-syst
 }
 
 
+/* ── split expense ── */
+.split-box{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin:-4px 0 14px}
+.split-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.split-title{font-size:12px;font-weight:600;color:var(--text2)}
+.split-reset{font-size:12px;color:var(--blue);cursor:pointer;font-weight:500;background:none;border:none}
+.split-row{display:flex;align-items:center;gap:8px;padding:5px 0}
+.split-name{flex:1;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.split-pct{font-size:11px;color:var(--text3);width:38px;text-align:right}
+.split-input{width:96px;padding:7px 9px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:var(--surface);outline:none;text-align:right}
+.split-input:focus{border-color:var(--blue)}
+.split-input.manual{border-color:var(--amber)}
+.split-note{font-size:11px;margin-top:6px;color:var(--text2)}
+.split-note.err{color:var(--red)}
+.mem-card{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 12px;margin-bottom:6px;box-shadow:var(--shadow)}
+.mem-bar{height:5px;border-radius:3px;background:var(--surface2);margin-top:5px;overflow:hidden}
+.mem-bar>div{height:100%;background:var(--red);border-radius:3px}
+.mem-total{display:flex;justify-content:space-between;padding:6px 4px 0;font-size:13px;font-weight:700}
 /* ── cloud additions: splash, login, members ── */
 #splashScreen{background:var(--blue);color:#fff;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:.5px}
 #authScreen{background:var(--blue);align-items:center;justify-content:center;padding:24px;overflow-y:auto}
@@ -339,7 +356,7 @@ window.addEventListener('error',function(e){
 //  Flyover — cash book with Firebase Auth + Firestore
 //  Data model:
 //    books/{bookId}                 name, emoji, ownerId, memberIds[], members{uid:{name,email,role}}, categories{expense[],income[]}
-//    books/{bookId}/txns/{txnId}    type, amount, category, date, remark, createdBy, createdByName, createdAt
+//    books/{bookId}/txns/{txnId}    type, amount, category, date, remark, createdBy, createdByName, createdAt, splits{uid:amount} (expense in shared book)
 //  Roles: owner (everything) · editor (entries + categories) · viewer (read only)
 // ═══════════════════════════════════════════════
 const firebaseConfig={
@@ -509,12 +526,18 @@ function bookFromDoc(d){
     categories:{expense:Array.isArray(c.expense)?c.expense.map(String):[...DEFAULT_EXPENSE_CATS],
                 income:Array.isArray(c.income)?c.income.map(String):[...DEFAULT_INCOME_CATS]}};
 }
+function cleanSplits(sp){
+  if(!sp||typeof sp!=='object')return null;
+  const o={};let n=0;
+  Object.keys(sp).forEach(k=>{const v=Number(sp[k]);if(Number.isFinite(v)&&v>=0){o[k]=v;n++;}});
+  return n?o:null;
+}
 function cleanTxn(id,bookId,t){
   if(!t||(t.type!=='income'&&t.type!=='expense'))return null;
   const amount=Number(t.amount);
   if(!Number.isFinite(amount)||amount<=0||typeof t.date!=='string'||!/^\d{4}-\d{2}-\d{2}/.test(t.date))return null;
   return{id,bookId,type:t.type,amount,category:String(t.category||'Other').slice(0,80),date:t.date.slice(0,10),
-    remark:t.remark?String(t.remark).slice(0,500):'',createdBy:t.createdBy||'',createdByName:t.createdByName||'',createdAt:t.createdAt||''};
+    remark:t.remark?String(t.remark).slice(0,500):'',splits:cleanSplits(t.splits),createdBy:t.createdBy||'',createdByName:t.createdByName||'',createdAt:t.createdAt||''};
 }
 
 function handleBooksSnap(snap){
@@ -863,6 +886,45 @@ function renderPage(){
   el.innerHTML=V.page==='dashboard'?renderDashboard():V.page==='transactions'?renderTransactions():V.page==='categories'?renderCategoriesPage():renderProfilePage();
   refreshShareSheetIfOpen();
 }
+function splitLine(t){
+  const b=currentBook();
+  if(!b||!isShared(b)||t.type!=='expense'||!t.splits)return '';
+  const parts=Object.keys(t.splits).filter(u=>b.members[u]).map(u=>esc((b.members[u].name||b.members[u].email||'?').split(' ')[0])+' '+fmt(t.splits[u]));
+  return parts.length?`<div style="font-size:10px;color:var(--text3);margin-top:1px">Split: ${parts.join(' · ')}</div>`:'';
+}
+function memberList(b){
+  return Object.entries(b.members).sort((x,y)=>(x[1].role==='owner'?0:1)-(y[1].role==='owner'?0:1)).map(([uid,m])=>({uid,name:m.name||m.email||'Member'}));
+}
+// equal split in paise so the parts always add up exactly
+function equalShares(total,uids){
+  const c=Math.round(total*100),n=uids.length,base=Math.floor(c/n),extra=c-base*n,o={};
+  uids.forEach((u,i)=>{o[u]=(base+(i<extra?1:0))/100;});
+  return o;
+}
+// expense per member for a list of txns (entries without a saved split are shared equally among current members)
+function memberExpense(b,txns){
+  const list=memberList(b),uids=list.map(m=>m.uid),tot={};
+  uids.forEach(u=>tot[u]=0);let other=0;
+  txns.filter(t=>t.type==='expense').forEach(t=>{
+    const sp=t.splits||equalShares(t.amount,uids);
+    Object.keys(sp).forEach(u=>{if(u in tot)tot[u]+=sp[u];else other+=sp[u];});
+  });
+  return{list,tot,other};
+}
+function renderMemberExpense(txns,exp){
+  const b=currentBook();
+  if(!b||!isShared(b))return '';
+  const {list,tot,other}=memberExpense(b,txns);
+  const cards=list.map(m=>{
+    const v=tot[m.uid],pct=exp>0?Math.round(v/exp*100):0;
+    return `<div class="mem-card"><div class="member-avatar">${esc(initials(m.name))}</div>
+      <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px"><span class="member-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}${m.uid===U.uid?' (you)':''}</span><span style="font-weight:700;color:var(--red)">${fmt(v)}</span></div>
+      <div class="mem-bar"><div style="width:${pct}%"></div></div></div></div>`;
+  }).join('');
+  const oth=other>0.004?`<div class="mem-card"><div class="member-avatar">?</div><div style="flex:1;font-size:13px">Former members</div><span style="font-weight:700;color:var(--red)">${fmt(other)}</span></div>`:'';
+  return `<div class="section" style="padding-bottom:0"><div class="section-hdr"><div class="section-title">Expense by member</div></div>${cards}${oth}
+    <div class="mem-total"><span>Total expense</span><span style="color:var(--red)">${fmt(exp)}</span></div></div>`;
+}
 function txnRow(t,badge){
   const by=isShared(currentBook())&&t.createdByName?`<span style="font-size:10px;color:var(--text3)"> · ${esc(t.createdByName)}</span>`:'';
   return `<div class="txn-item" data-id="${esc(t.id)}" onclick="openTxnSheet(this.dataset.id)">
@@ -870,6 +932,7 @@ function txnRow(t,badge){
     <div class="txn-body">
       <div class="txn-cat">${esc(t.category)}${badge?` <span class="badge badge-${t.type}">${t.type}</span>`:''}${by}</div>
       <div class="txn-meta">${t.remark?(badge?'💬 ':'')+esc(t.remark):t.date}</div>
+      ${splitLine(t)}
     </div>
     <div class="txn-right"><div class="txn-amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div><div class="txn-date">${t.date}</div></div></div>`;
 }
@@ -887,6 +950,7 @@ function renderDashboard(){
     <div class="s-card"><div class="s-label">Income</div><div class="s-val income">${fmt(inc)}</div></div>
     <div class="s-card"><div class="s-label">Expense</div><div class="s-val expense">${fmt(exp)}</div></div>
     <div class="s-card balance-card"><div class="s-label">Balance — ${periodLabel()}</div><div class="s-val ${bal>=0?'':'negative'}">${fmtSgn(bal)}</div></div></div>
+    ${renderMemberExpense(txns,exp)}
     ${Object.keys(catMap).length?`<div class="section"><div class="section-hdr"><div class="section-title">Expense Breakdown</div></div>
       <div style="position:relative;height:280px;display:flex;justify-content:center;align-items:center"><canvas id="expenseChart"></canvas>
       <div style="position:absolute;text-align:center;pointer-events:none"><div style="font-size:12px;color:var(--text2)">Total Expense</div><div style="font-size:20px;font-weight:700">${fmt(exp)}</div></div></div></div>`:''}
@@ -1073,14 +1137,77 @@ function openTxnSheet(txnId){
     <div class="type-toggle">
       <button class="type-btn ${_txnType==='income'?'active-income':''}" id="btnI" onclick="setTxnType('income')">↑ Income</button>
       <button class="type-btn ${_txnType==='expense'?'active-expense':''}" id="btnE" onclick="setTxnType('expense')">↓ Expense</button></div>
-    <div class="form-group"><label class="form-label">Amount (₹)</label><input class="form-input" id="fAmt" type="number" inputmode="decimal" placeholder="0.00" value="${ex?ex.amount:''}" min="0" step="0.01"/></div>
+    <div class="form-group"><label class="form-label">Amount (₹)</label><input class="form-input" id="fAmt" type="number" inputmode="decimal" placeholder="0.00" value="${ex?ex.amount:''}" min="0" step="0.01" oninput="onAmtInput()"/></div>
+    <div id="splitBox"></div>
     <div class="form-group"><label class="form-label">Category</label><div class="cat-grid" id="catGrid"></div></div>
     <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="fDate" type="date" value="${ex?ex.date:today()}"/></div>
     <div class="form-group"><label class="form-label">Remark <span style="color:var(--text3)">(optional)</span></label><input class="form-input" id="fRemark" maxlength="500" placeholder="Add a note..." value="${ex?esc(ex.remark):''}"/></div>
     ${ex?`<button class="btn btn-danger" data-id="${esc(ex.id)}" onclick="deleteTxn(this.dataset.id)" style="margin-bottom:8px">Delete Entry</button>`:''}
     <button class="btn btn-primary" data-id="${ex?esc(ex.id):''}" onclick="saveTxn(this.dataset.id)">Save Entry</button>`;
-  renderCatGrid();openSheet();
+  initSplit(ex);renderCatGrid();openSheet();
   setTimeout(()=>{try{$('fAmt').focus();}catch(e){}},300);
+}
+// ── split state: manual = uids whose amount the user typed; vals = current amount text per uid
+let _split={manual:{},vals:{}};
+function splitActive(){const b=currentBook();return !!b&&isShared(b)&&_txnType==='expense';}
+function initSplit(ex){
+  const b=currentBook();_split={manual:{},vals:{}};
+  if(!b||!isShared(b))return;
+  const uids=memberList(b).map(m=>m.uid);
+  if(ex&&ex.type==='expense'&&ex.splits){
+    // editing: keep the saved split; treat it as manual if it isn't an equal split
+    const eq=equalShares(ex.amount,uids);
+    const isEq=uids.every(u=>Math.abs((ex.splits[u]||0)-eq[u])<0.005);
+    uids.forEach(u=>{_split.vals[u]=String(ex.splits[u]||0);if(!isEq)_split.manual[u]=true;});
+  }else recalcSplit();
+  renderSplitBox();
+}
+function recalcSplit(){
+  const b=currentBook();if(!b)return;
+  const uids=memberList(b).map(m=>m.uid),amt=parseFloat(($('fAmt')||{}).value)||0;
+  const free=uids.filter(u=>!_split.manual[u]);
+  const locked=uids.filter(u=>_split.manual[u]).reduce((s,u)=>s+(parseFloat(_split.vals[u])||0),0);
+  if(!free.length)return;
+  const rem=Math.max(0,Math.round((amt-locked)*100)/100);
+  const sh=equalShares(rem,free);
+  free.forEach(u=>{_split.vals[u]=amt?String(sh[u]):'';});
+}
+function onAmtInput(){
+  if(!splitActive())return;
+  _split.manual={};recalcSplit();renderSplitBox();   // new amount → back to an equal split
+}
+function onSplitInput(uid,el){
+  _split.manual[uid]=true;_split.vals[uid]=el.value;
+  const b=currentBook(),uids=memberList(b).map(m=>m.uid);
+  if(uids.every(u=>_split.manual[u])){/* everyone typed: just validate */}
+  else recalcSplit();
+  uids.forEach(u=>{const i=document.querySelector('.split-input[data-u="'+u+'"]');if(i&&i!==el){i.value=_split.vals[u];i.classList.toggle('manual',!!_split.manual[u]);}});
+  el.classList.add('manual');updateSplitNote();
+}
+function resetSplit(){_split.manual={};recalcSplit();renderSplitBox();}
+function splitTotals(){
+  const b=currentBook(),uids=memberList(b).map(m=>m.uid);
+  const amt=Math.round((parseFloat($('fAmt').value)||0)*100),sum=Math.round(uids.reduce((s,u)=>s+(parseFloat(_split.vals[u])||0),0)*100);
+  return{amt,sum,diff:amt-sum};
+}
+function updateSplitNote(){
+  const n=$('splitNote');if(!n)return;
+  const {amt,diff}=splitTotals();
+  if(!amt){n.className='split-note';n.textContent='Enter an amount to see the split';}
+  else if(diff===0){n.className='split-note';n.textContent='✓ Adds up to '+fmt(amt/100);}
+  else{n.className='split-note err';n.textContent=(diff>0?'₹'+(diff/100).toFixed(2)+' left to assign':'₹'+(Math.abs(diff)/100).toFixed(2)+' over the amount');}
+  const b=currentBook(),list=memberList(b),tot=amt/100;
+  list.forEach(m=>{const e=document.querySelector('.split-pct[data-u="'+m.uid+'"]');if(e)e.textContent=tot?Math.round((parseFloat(_split.vals[m.uid])||0)/tot*100)+'%':'';});
+}
+function renderSplitBox(){
+  const box=$('splitBox');if(!box)return;
+  if(!splitActive()){box.innerHTML='';return;}
+  const b=currentBook();
+  box.innerHTML=`<div class="split-box"><div class="split-hdr"><span class="split-title">Split between members</span><button class="split-reset" onclick="resetSplit()">Reset to equal</button></div>
+    ${memberList(b).map(m=>`<div class="split-row"><span class="split-name">${esc(m.name)}${m.uid===U.uid?' (you)':''}</span><span class="split-pct" data-u="${esc(m.uid)}"></span>
+      <input class="split-input ${_split.manual[m.uid]?'manual':''}" data-u="${esc(m.uid)}" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" value="${esc(_split.vals[m.uid]||'')}" oninput="onSplitInput(this.dataset.u,this)"/></div>`).join('')}
+    <div class="split-note" id="splitNote"></div></div>`;
+  updateSplitNote();
 }
 function renderCatGrid(){
   const grid=$('catGrid');if(!grid)return;
@@ -1093,7 +1220,7 @@ function setTxnType(t){
   _txnType=t;_selCat='';
   $('btnI').className='type-btn'+(t==='income'?' active-income':'');
   $('btnE').className='type-btn'+(t==='expense'?' active-expense':'');
-  renderCatGrid();
+  renderSplitBox();renderCatGrid();
 }
 function saveTxn(id){
   const b=currentBook();if(!b||!canEdit(b)){toast('You have view-only access to this book');return;}
@@ -1102,6 +1229,13 @@ function saveTxn(id){
   if(!_selCat){toast('Pick a category');return;}
   if(!date){toast('Pick a date');return;}
   const base={type:_txnType,amount:amt,category:_selCat.slice(0,80),date,remark};
+  if(splitActive()){
+    const uids=memberList(b).map(m=>m.uid),sp={};
+    for(const u of uids){const v=Math.round((parseFloat(_split.vals[u])||0)*100)/100;if(v<0){toast('Split amounts cannot be negative');return;}sp[u]=v;}
+    const sum=Math.round(uids.reduce((s,u)=>s+sp[u],0)*100);
+    if(sum!==Math.round(amt*100)){toast('Split must add up to '+fmt(amt));return;}
+    base.splits=sp;
+  }else if(id)base.splits=FV.delete();
   const p=id?txCol(b.id).doc(id).update(Object.assign(base,{updatedAt:nowISO()}))
             :txCol(b.id).doc().set(Object.assign(base,{createdBy:U.uid,createdByName:U.name,createdAt:nowISO()}));
   p.catch(dbErr);
